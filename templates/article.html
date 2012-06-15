@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>{{.Title}}</title>
+<link rel="stylesheet" href="/normalize.css"></link>
+<link rel="stylesheet" href="/article.css"></link>
+</head>
+<body>
+<article>
+	<h1 class="primary"><span class="content">{{.Title}}</span></h1>
+	<div class="js-article-body">
+	{{.Markdown | processMarkdown}}
+	</div>
+</article>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script src="/article.js"></script>
+</body>
+</html>

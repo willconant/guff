@@ -1,0 +1,71 @@
+article {
+	margin: 25px;
+}
+
+h1.primary, h2.primary {
+	position: relative;
+}
+
+div.edit-buttons {
+	position: absolute;
+	bottom: -14px;
+	font-size: 10px;
+	font-weight: normal;
+	font-family: monaco, monospace;
+}
+
+div.edit-buttons a, div.edit-buttons a:visited {
+	color: rgb(175, 175, 200);
+	text-decoration: none;
+}
+
+div.edit-buttons a:hover {
+	color: rgb(0, 125, 250);
+}
+
+div.edit-buttons a.disabled, div.edit-buttons a.disabled:visited {
+	color: rgb(220, 220, 220);
+	text-decoration: none;
+}
+
+div.edit-buttons a.disabled:hover {
+	color: rgb(220, 220, 220);
+}
+
+div.edit-buttons span.js-saved-message {
+	
+}
+
+div.modal {
+	position: fixed;
+	top: 25px;
+	left: 25px;
+	padding: 25px;
+	background-color: white;
+	-webkit-box-shadow: 0px 0px 15px 2px rgb(150, 150, 200);
+}
+
+div.modal .editor {
+	border: 1px solid #eee;
+	font-size: 12px;
+	font-family: monaco, monospace;
+	outline: none;
+}
+
+div.modal .buttons {
+	margin-top: 25px;
+	font-size: 10px;
+	font-weight: normal;
+	font-family: monaco, monospace;
+}
+
+div.modal .buttons a, div.modal .buttons a:visited {
+	color: rgb(0, 100, 200);
+	text-decoration: none;
+	cursor: pointer;
+}
+
+div.modal .buttons a:hover {
+	color: rgb(0, 125, 250);
+}
+
