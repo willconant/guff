@@ -1,21 +1,28 @@
 article {
 	margin: 25px;
+	width: 640px;
+	float: left;
 }
 
-h1.primary, h2.primary {
-	position: relative;
+article h1.primary {
+	margin-top: 0;
+}
+
+div#sidebar {
+	margin: 25px 25px 25px 0;
+	padding: 0 0 0 25px;
+	border-left: 1px solid #aaa;
+	float: left;
 }
 
 div.edit-buttons {
-	position: absolute;
-	bottom: -14px;
-	font-size: 10px;
+	font-size: 14px;
 	font-weight: normal;
 	font-family: monaco, monospace;
 }
 
 div.edit-buttons a, div.edit-buttons a:visited {
-	color: rgb(175, 175, 200);
+	color: rgb(0, 100, 200);
 	text-decoration: none;
 }
 
@@ -38,18 +45,31 @@ div.edit-buttons span.js-saved-message {
 
 div.modal {
 	position: fixed;
-	top: 25px;
-	left: 25px;
-	padding: 25px;
+	top: 0;
+	left: 0;
+	margin: 0 25px;
 	background-color: white;
-	-webkit-box-shadow: 0px 0px 15px 2px rgb(150, 150, 200);
+	/*-webkit-box-shadow: 0px 0px 15px 2px rgb(150, 150, 200);*/
+}
+
+div.modal div.title {
+	margin: 25px 0;
+}
+
+div.modal div.title input {
+	width: 628px;
+	border: 1px solid #aaa;
+	outline: none;
+	padding: 5px;
 }
 
 div.modal .editor {
-	border: 1px solid #eee;
+	border: 1px solid #aaa;
 	font-size: 12px;
 	font-family: monaco, monospace;
 	outline: none;
+	padding: 5px;
+	width: 628px;
 }
 
 div.modal .buttons {

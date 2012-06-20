@@ -1,60 +1,44 @@
+'use strict';
+
 var article = null;
+var unsavedChanges = false;
 
 $(function() {
-	var $buttons = $('<div class="edit-buttons">').appendTo('h1.primary');
-	$('<a href="#" class="js-edit-title">[Edit Title] </a>').appendTo($buttons);
-	$('<a href="#" class="js-edit-markdown">[Edit Body] </a>').appendTo($buttons);
-	$('<a href="#" class="js-save-changes disabled">[Save Changes] </a>').appendTo($buttons);
-	$('<span class="js-saved-message"> <-- Your changes have been saved.</span>').appendTo($buttons).hide();
+	var $buttons = $('div.edit-buttons');
+	$('<a href="#" class="js-edit-article">[Edit Article] </a>').appendTo($buttons);
+	$('<a href="#" class="js-view-article">[Preview Changes] </a>').appendTo($buttons).hide();
+	$('<a href="#" class="js-save-article">[Save Changes] </a>').appendTo($buttons).hide();
+	$('<span class="js-saved-message">[Saved]</span>').appendTo($buttons).hide();
 
-	$('article').on('click', 'h1.primary .js-edit-title', editArticleTitle);
-	$('article').on('click', 'h1.primary .js-edit-markdown', editArticleMarkdown);
-	$('article').on('click', 'h1.primary .js-save-changes', putArticle);
+	$buttons.on('click', '.js-edit-article', editArticle);
+	$buttons.on('click', '.js-save-article', saveArticle);
+	
+	// var left = $('#sidebar').offset().left;
+	// $('#sidebar').css('position', 'fixed').css('left', left);;
+	
+	window.onbeforeunload = function() {
+		if (unsavedChanges) {
+			return "You have unsaved changes.";
+		}
+	};
 });
 
-function editArticleTitle(e) {
-	e.preventDefault();
-	var $content = $('h1.primary span.content');
-	
-	if (article !== null) {
-		onGet(article);
-	}
-	else {
-		$.ajax({
-			type:     'GET',
-			url:      window.location.href + '?json=1',
-			success:  onGet,
-			dataType: 'json'
-		});
-	}
-	
-	function onGet(result) {
-		article = result;
-		
-		$('article .js-save-changes').removeClass('disabled');
-		
-		article.Title = prompt("Title", article.Title);
-		$content.text(article.Title);
-	}
-}
-
-function editArticleMarkdown(e) {
+function editArticle(e) {
 	e.preventDefault();
 	
-	var $content = $('div.js-article-body');
 	var $modal = $('<div class="modal">');
+	var $title = $('<input type="text">').appendTo($('<div class="title">').appendTo($modal));
 	var $editor = $('<textarea class="editor"></textarea>').appendTo($modal);
-	var $buttons = $('<div class="buttons">').appendTo($modal);
-	var $save = $('<a class="js-save-button">[Preview]</a>').appendTo($buttons);
-	
+
 	if (article !== null) {
 		onGet(article);
 	}
 	else {
 		$.ajax({
 			type:     'GET',
-			url:      window.location.href + '?json=1',
+			url:      window.location.pathname + '?json=1',
 			success:  onGet,
+			error:    onAjaxError,
 			dataType: 'json'
 		});
 	}
@@ -62,34 +46,56 @@ function editArticleMarkdown(e) {
 	function onGet(result) {
 		article = result;
 		
-		$('article .js-save-changes').removeClass('disabled');
-		
-		$save.click(function() {
+		$('.js-edit-article').hide();
+		$('.js-save-article').hide();
+		$('.js-view-article').show().unbind('click').click(function(e) {
+			e.preventDefault();
+			
 			$.ajax({
 				type:     'POST',
 				url:      '/_markdown',
 				data:     $editor.val(),
-				success:  onSave,
+				success:  onMarkdown,
+				error:    onAjaxError,
 				dataType: 'text'
 			});
 		});
 		
+		$('article .js-article-body').html('');
 		$modal.appendTo('body');
 		
+		$title.val(article.Title);
 		$editor.val(article.Markdown);
-		$editor.width($(window).width() - 100);
-		$editor.height($(window).height() - 150);
-		$editor[0].focus();
+		$editor.height($(window).height() - 135);
+		$modal.height($(window).height());
 	}
 	
-	function onSave(html, status) {
-		article.Markdown = $editor.val();
-		$content[0].innerHTML = html;
+	function onMarkdown(html, status) {
+		var newTitle = $title.val() || article._id;
+		var newMarkdown = $editor.val();
+		if (newTitle !== article.Title) {
+			article.Title = newTitle;
+			unsavedChanges = true;
+		}
+		if (newMarkdown !== article.Markdown) {
+			article.Markdown = newMarkdown;
+			unsavedChanges = true;
+		}
+		
+		$('article h1.primary span.content').text(article.Title);
+		$('article .js-article-body').html(html);
+		
 		$modal.remove();
+		$('.js-edit-article').show();
+		$('.js-view-article').hide();
+		
+		if (unsavedChanges) {
+			$('.js-save-article').show();
+		}
 	}
 }
 
-function putArticle(e) {
+function saveArticle(e) {
 	e.preventDefault();
 	
 	if (article === null) {
@@ -101,7 +107,7 @@ function putArticle(e) {
 		url:      window.location.href,
 		data:     article,
 		success:  onPut,
-		error:    onError,
+		error:    onAjaxError,
 		dataType: 'json'
 	});
 	
@@ -111,12 +117,14 @@ function putArticle(e) {
 		}
 		else {
 			article._rev = response.rev;
+			$('.js-save-article').hide();
 			$('.js-saved-message').show();
-			setTimeout(function(){ $('.js-saved-message').fadeOut('slow'); }, 1000);
+			unsavedChanges = false;
+			setTimeout(function(){ $('.js-saved-message').fadeOut('slow'); }, 250);
 		}
 	}
-	
-	function onError(xhr, status, error) {
-		alert(error);
-	}
+}
+
+function onAjaxError(xhr, status, error) {
+	alert(error);
 }
