@@ -1,27 +1,48 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>{{.Title}}</title>
+<title>{{.Article.Title}}</title>
 <link rel="stylesheet" href="/normalize.css"></link>
 <link rel="stylesheet" href="/article.css"></link>
 </head>
 <body>
 <article>
-	<h1 class="primary"><span class="content">{{.Title}}</span></h1>
+	<h1 class="primary"><span class="content">{{.Article.Title}}</span></h1>
 	<div class="js-article-body">
-	{{.Markdown | processMarkdown}}
+	{{.Article.Markdown | processMarkdown}}
 	</div>
 </article>
 <div id="sidebar">
-<div class="edit-buttons"></div>
+<div class="edit-buttons">
+	<a href="#" class="js-login" style="display: none;">[Login] </a>
+	<a href="#" class="js-edit-article" style="display: none;">[Edit Article] </a>
+	<a href="#" class="js-view-article" style="display: none;">[Preview Changes] </a>
+	<a href="#" class="js-save-article" style="display: none;">[Save Changes] </a>
+	<span class="js-saved-message" style="display: none;">[Saved]</span>
+	&nbsp;
+	<br><br>
+	<a href="#" class="js-logout" style="display: none;">[Logout] </a>
+	&nbsp;
+</div>
+
+<!-- <p><label><input id="js-is-public" type="checkbox"> Make this article public</label></p> -->
 
 <p>Versions</p>
 <ul>
-<li>Version 1</li>
+{{range .Versions}}
+<li>{{index .Key 1}}</li>
+{{end}}
 </ul>
 
 </div>
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script src="https://login.persona.org/include.js"></script>
+<script>
+	var auth = {
+		email: {{js .Auth.Email}},
+		write: {{js .Auth.Write}} === 'true'
+	};
+</script>
 <script src="/article.js"></script>
 </body>
 </html>

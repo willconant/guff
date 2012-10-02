@@ -5,22 +5,52 @@ var unsavedChanges = false;
 
 $(function() {
 	var $buttons = $('div.edit-buttons');
-	$('<a href="#" class="js-edit-article">[Edit Article] </a>').appendTo($buttons);
-	$('<a href="#" class="js-view-article">[Preview Changes] </a>').appendTo($buttons).hide();
-	$('<a href="#" class="js-save-article">[Save Changes] </a>').appendTo($buttons).hide();
-	$('<span class="js-saved-message">[Saved]</span>').appendTo($buttons).hide();
 
+	$buttons.on('click', '.js-login', function(e) { e.preventDefault(); navigator.id.request() });
+	$buttons.on('click', '.js-logout', function(e) { e.preventDefault(); navigator.id.logout() });
 	$buttons.on('click', '.js-edit-article', editArticle);
 	$buttons.on('click', '.js-save-article', saveArticle);
-	
+
+	if (auth.email === '') {
+		$buttons.find('.js-login').show();
+	}
+	else {
+		$buttons.find('.js-logout').show();
+	}
+
+	if (auth.write) {
+		$buttons.find('.js-edit-article').show();
+	}
+
 	// var left = $('#sidebar').offset().left;
 	// $('#sidebar').css('position', 'fixed').css('left', left);;
 	
 	window.onbeforeunload = function() {
 		if (unsavedChanges) {
-			return "You have unsaved changes.";
+			return 'You have unsaved changes.';
 		}
 	};
+
+	navigator.id.watch({
+		loggedInUser: auth.email || null,
+		onlogin: function(assertion) {
+			$.ajax({
+				type: 'POST',
+				url: '/_login',
+				data: { assertion: assertion },
+				success: function(res, status, xhr) { window.location.reload(); },
+				error: function(res, status, xhr) { alert('login failure' + res); }
+			});
+		},
+		onlogout: function() {
+			$.ajax({
+				type: 'POST',
+				url: '/_logout',
+				success: function(res, status, xhr) { window.location = '/'; },
+				error: function(res, status, xhr) { alert('logout failure' + res); }
+			});
+		}
+	})
 });
 
 function editArticle(e) {
@@ -113,7 +143,7 @@ function saveArticle(e) {
 	
 	function onPut(response) {
 		if (response.conflict) {
-			alert("There was a conflict saving this article.");
+			alert('There was a conflict saving this article.');
 		}
 		else {
 			article._rev = response.rev;
