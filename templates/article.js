@@ -22,6 +22,10 @@ $(function() {
 		$buttons.find('.js-edit-article').show();
 	}
 
+	if (auth.admin) {
+		$buttons.find('.js-admin').show();
+	}
+
 	// var left = $('#sidebar').offset().left;
 	// $('#sidebar').css('position', 'fixed').css('left', left);;
 	
@@ -98,17 +102,24 @@ function editArticle(e) {
 		$editor.val(article.Markdown);
 		$editor.height($(window).height() - 135);
 		$modal.height($(window).height());
+		$('.visibility').show();
 	}
 	
 	function onMarkdown(html, status) {
 		var newTitle = $title.val() || article._id;
 		var newMarkdown = $editor.val();
+		var newPublic = $('#js-is-public')[0].checked;
+
 		if (newTitle !== article.Title) {
 			article.Title = newTitle;
 			unsavedChanges = true;
 		}
 		if (newMarkdown !== article.Markdown) {
 			article.Markdown = newMarkdown;
+			unsavedChanges = true;
+		}
+		if (newPublic !== article.Public) {
+			article.Public = newPublic;
 			unsavedChanges = true;
 		}
 		
@@ -118,8 +129,33 @@ function editArticle(e) {
 		$modal.remove();
 		$('.js-edit-article').show();
 		$('.js-view-article').hide();
+		$('.visibility').hide();
 		
 		if (unsavedChanges) {
+			$('.js-save-article').show();
+		}
+	}
+}
+
+function setPublic(isPublic) {
+	if (article !== null) {
+		onGet(article);
+	}
+	else {
+		$.ajax({
+			type:     'GET',
+			url:      window.location.pathname + '?json=1',
+			success:  onGet,
+			error:    onAjaxError,
+			dataType: 'json'
+		});
+	}
+
+	function onGet(result) {
+		article = result;
+		if (article.Public !== isPublic) {
+			article.Public = isPublic;
+			unsavedChanges = true;
 			$('.js-save-article').show();
 		}
 	}
@@ -150,7 +186,8 @@ function saveArticle(e) {
 			$('.js-save-article').hide();
 			$('.js-saved-message').show();
 			unsavedChanges = false;
-			setTimeout(function(){ $('.js-saved-message').fadeOut('slow'); }, 250);
+			//setTimeout(function(){ $('.js-saved-message').fadeOut('slow'); }, 250);
+			setTimeout(function() { window.location.reload(); }, 500);
 		}
 	}
 }

@@ -1,9 +1,9 @@
 package guff
 
 import (
-	// "bytes"
 	"fmt"
-	"cot"
+	"strings"
+	"time"
 )
 
 type User struct {
@@ -13,50 +13,99 @@ type User struct {
 	Role    string
 }
 
+const (
+	RolePending = "Pending"
+	RoleRead = "Read"
+	RoleWrite = "Write"
+	RoleAdmin = "Admin"
+)
+
 type Article struct {
 	ID        string `json:"_id"`
 	Rev       string `json:"_rev,omitempty"`
 	Type      string
-	DateStr   string
+	Date      string
 	Title     string
+	Author    string
 	Markdown  string
 	Public    bool
+	History   []*HistoryItem
 }
 
-type ArticleVersion struct {
+type HistoryItem struct {
+	Date          string
+	Title         string
+	Author        string
+	HistoryBodyID string
+}
+
+type HistoryBody struct {
 	ID        string `json:"_id"`
 	Rev       string `json:"_rev,omitempty"`
 	Type      string
-	ArticleID string
-	DateStr   string
-	Title     string
 	Markdown  string
 }
 
+const (
+	TypeArticle = "Article"
+	TypeHistoryBody = "HistoryBody"
+)
 
-
-func (handler *Handler) recordLogin(email string) {
+func (handler *Handler) recordLogin(email string) error {
 	var user User
 	var rev string
 	var err error
 	var found bool
 
-	userID := "user-" + email
+	userID := "user-" + strings.ToLower(email)
 
 	for {
 		found, err = handler.db.GetDoc(userID, &user)
-		if err != nil { panic(err) }
+		if err != nil { return err }
 
 		if !found {
 			user.ID = userID
 			user.Email = email
-			user.Role = "Admin"
+
+			firstUserRev, err := handler.db.PutDoc("first-user", &map[string]interface{}{
+				"_id":   "first-user",
+				"email": email,
+			})
+			if err != nil { return err }
+
+			if firstUserRev == "" {
+				user.Role = RolePending
+			} else {
+				user.Role = RoleAdmin
+			}
 		}
 
 		rev, err = handler.db.PutDoc(user.ID, &user)
-		if err != nil { panic(err) }
+		if err != nil { return err }
 		if rev != "" { break }
 	}
+
+	return nil
+}
+
+func (handler *Handler) changeRole(email string, role string) error {
+	var user User
+
+	userID := "user-" + strings.ToLower(email)
+
+	for {
+		found, err := handler.db.GetDoc(userID, &user)
+		if err != nil { return err }
+		if !found { return fmt.Errorf("invalid userID " + userID) }
+
+		user.Role = role
+
+		rev, err := handler.db.PutDoc(user.ID, &user)
+		if err != nil { return err }
+		if rev != "" { break }
+	}
+
+	return nil
 }
 
 func (handler *Handler) getArticle(id string) (*Article, error) {
@@ -68,105 +117,86 @@ func (handler *Handler) getArticle(id string) (*Article, error) {
 		return nil, err
 	}
 
-	if found && article.Type != "Article" {
+	if found && article.Type != TypeArticle {
 		return nil, fmt.Errorf("invalid ArticleID: %v", id)
 	}
 
 	if !found {
 		article.ID = id
-		article.Type = "Article"
+		article.Type = TypeArticle
+		article.Date = time.Now().Format(time.RFC3339)
 		article.Title = article.ID
 		article.Markdown = `This article doesn't exist yet, but if you edit it and save it, it will exist!`
+		article.History = make([]*HistoryItem, 0)
 	}
 
 	if article.ID == "index" {
-		article.Public = true;
+		article.Public = true
 	}
 
 	return &article, nil
 }
 
+type ArticleUpdate struct {
+	ArticleID string
+	Rev       string
+	Title     string
+	Author    string
+	Markdown  string
+	Public    bool
+}
+
+func (handler *Handler) updateArticle(update *ArticleUpdate) (string, error) {
+	article, err := handler.getArticle(update.ArticleID)
+	if err != nil { return "", err }
+
+	if article.Rev != update.Rev {
+		// we can already see a conflict
+		return "", nil
+	}
+
+	if article.Rev != "" {
+		historyBodyId, err := handler.saveHistoryBody(article.Markdown)
+		if err != nil { return "", err }
+
+		article.History = append(article.History, &HistoryItem{
+			article.Date,
+			article.Title,
+			article.Author,
+			historyBodyId,
+		})
+	}
+
+	article.Date = time.Now().Format(time.RFC3339)
+	article.Title = update.Title
+	article.Author = update.Author
+	article.Markdown = update.Markdown
+	article.Public = (article.ID == "index" || update.Public)
+
+	return handler.putArticle(article)
+}
+
 func (handler *Handler) putArticle(article *Article) (string, error) {
-	var err error
-	
-	// first, load the article as it exists
-	curArticle, err := handler.getArticle(article.ID)
-	if err != nil {
-		return "", err
-	}
-	
-	if curArticle.Rev != "" {
-		if curArticle.Rev != article.Rev {
-			// we can already see a conflict
-			return "", nil
-		}
-		
-		// save a backup of the current article
-		err = handler.saveVersion(curArticle)
-		if err != nil {
-			return "", err
-		}
-	}
-	
 	return handler.db.PutDoc(article.ID, article)
 }
 
-func (handler *Handler) saveVersion(article *Article) error {
-	version := &ArticleVersion{
+func (handler *Handler) saveHistoryBody(markdown string) (string, error) {
+	historyBody := &HistoryBody{
 		"",
 		"",
-		"ArticleVersion",
-		article.ID,
-		article.DateStr,
-		article.Title,
-		article.Markdown,
+		TypeHistoryBody,
+		markdown,
 	}
 
 	var err error
 
-	version.ID, err = handler.db.UUID()
-	if err != nil {
-		return err
-	}
+	historyBody.ID, err = handler.db.UUID()
+	if err != nil { return "", err }
 
-	_, err = handler.db.PutDoc(version.ID, version)
-	return err
-}
+	_, err = handler.db.PutDoc(historyBody.ID, historyBody)
+	if err != nil { return "", err }
 
-func (handler *Handler) getVersion(id string) (*ArticleVersion, error) {
-	var version ArticleVersion
-
-	_, err := handler.db.GetDoc(id, &version)
-	if err != nil { return nil, err }
-
-	if version.Type != "ArticleVersion" {
-		return nil, fmt.Errorf("invalid ArticleVersionID: %v", id)
-	}
-
-	return &version, nil
-}
-
-type ArticleVersionListRow struct {
-	ID  string
-	Key []string
-}
-
-func (handler *Handler) getArticleVersionList(articleID string) ([]ArticleVersionListRow, error) {
-	query := &cot.ViewQuery{}
-	query.Design = "guff"
-	query.Name = "versions"
-	query.MapDef = `function(doc) { if (doc.Type === 'ArticleVersion') emit([doc.ArticleID, doc.DateStr], null); }`
-	query.StartKey = []interface{}{articleID}
-	query.EndKey = []interface{}{articleID, "\uFFF0"}
-
-	var rows []ArticleVersionListRow
-
-	_, err := handler.db.Query(query, &rows)
-	if err != nil {
-		return nil, err
-	}
-
-	return rows, nil
+	return historyBody.ID, nil
 }
 
 func isArticlePath(path string) bool {

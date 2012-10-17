@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Admin</title>
+<link rel="stylesheet" href="/normalize.css"></link>
+<link rel="stylesheet" href="/admin.css"></link>
+</head>
+<body>
+<div>
+	<h1 class="primary">Admin</h1>
+	
+	<h2>Users</h2>
+	<table border="0" cellspacing="0" cellpadding="0">
+	<tbody>
+	{{range .UserRows}}
+		<tr class="user-row" data-start-role="{{.Role}}">
+			<td>{{.Email}}</td>
+			<td>
+				<label>
+					<input type="radio" class="role-radio" name="role-{{.Email}}" value="Pending">
+					Pending
+				</label>
+			</td>
+			<td>
+				<label>
+					<input type="radio" class="role-radio" name="role-{{.Email}}" value="Read">
+					Read
+				</label>
+			</td>
+			<td>
+				<label>
+					<input type="radio" class="role-radio" name="role-{{.Email}}" value="Write">
+					Write
+				</label>
+			</td>
+			<td>
+				<label>
+					<input type="radio" class="role-radio" name="role-{{.Email}}" value="Admin">
+					Admin
+				</label>
+			</td>
+		</tr>
+	{{end}}
+	</tbody>
+	</table>
+
+	<h2>Articles</h2>
+	<table border="0" cellspacing="0" cellpadding="0">
+	<thead>
+		<tr>
+			<th>Title</th>
+			<th>ID</th>
+			<th>Created</th>
+			<th>Modified</th>
+			<th>Visibility</th>
+		</tr>
+	</thead>
+	<tbody>
+	{{range .ArticleRows}}
+		<tr>
+			<td>{{.Title}}</td>
+			<td><a href="/{{.ID}}">{{.ID}}</a></td>
+			<td>{{formatDate .Value.CDate}}</td>
+			<td>{{formatDate .Value.MDate}}</td>
+			<td>{{if .Value.Public}}Public{{else}}Private{{end}}</td>
+		</tr>
+	{{end}}
+	</tbody>
+	</table>
+</div>
+<div id="sidebar">
+</div>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script src="https://login.persona.org/include.js"></script>
+<script>
+	var auth = {
+		email: {{js .Auth.Email}},
+		write: {{js .Auth.Write}} === 'true'
+	};
+</script>
+<script src="/admin.js"></script>
+</body>
+</html>

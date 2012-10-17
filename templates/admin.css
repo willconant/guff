@@ -1,0 +1,16 @@
+body {
+	margin: 25px;
+	font-size: 14px;
+}
+
+h1.primary {
+	margin-top: 0;
+}
+
+table th {
+	text-align: left;
+}
+
+table td {
+	padding-right: 30px;
+}

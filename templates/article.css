@@ -2,10 +2,22 @@ article {
 	margin: 25px;
 	width: 640px;
 	float: left;
+	font-family: helvetica;
+	font-size: 14px;
 }
 
 article h1.primary {
 	margin-top: 0;
+}
+
+article pre {
+	background-color: #eee;
+	padding: 5px;
+}
+
+article pre code {
+	font-family: Monaco, monospace;
+	font-size: 12px;
 }
 
 div#sidebar {
@@ -89,3 +101,22 @@ div.modal .buttons a:hover {
 	color: rgb(0, 125, 250);
 }
 
+div.visibility h2 {
+	margin-bottom: 0;
+}
+
+div.visibility label {
+	font-size: 14px;
+}
+
+ul.history {
+	margin: -1em 0 1em 0;
+	padding: 0;
+}
+
+ul.history li {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	font-size: 14px;
+}

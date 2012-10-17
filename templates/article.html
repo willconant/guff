@@ -20,19 +20,41 @@
 	<a href="#" class="js-save-article" style="display: none;">[Save Changes] </a>
 	<span class="js-saved-message" style="display: none;">[Saved]</span>
 	&nbsp;
-	<br><br>
-	<a href="#" class="js-logout" style="display: none;">[Logout] </a>
-	&nbsp;
 </div>
 
-<!-- <p><label><input id="js-is-public" type="checkbox"> Make this article public</label></p> -->
+<div class="visibility" style="display: none">
+	<h2>Visibility</h2>
+	<div>
+	<label>
+		<input id="js-is-public" type="radio" name="public" {{if .Article.Public}}checked{{end}}>
+		Public (visible to anyone)
+	</label>
+	</div>
+	<div>
+	<label>
+		<input id="js-is-private" type="radio" name="public" {{if not .Article.Public}}checked{{end}}>
+		Private (visible to approved users)
+	</label>
+	</div>
+</div>
 
-<p>Versions</p>
-<ul>
-{{range .Versions}}
-<li>{{index .Key 1}}</li>
+<h2>Edit History</h2>
+<ul class="history">
+{{if .Article.Rev}}
+{{range .Article.History}}
+<li>{{formatDate .Date}} by {{.Author}}</li>
+{{end}}
+<li>{{formatDate .Article.Date}} by {{.Article.Author}}
+{{else}}
+<li><i>This article hasn't bee saved yet</i></li>
 {{end}}
 </ul>
+
+<div class="edit-buttons">
+	<a href="#" class="js-logout" style="display: none;">[Logout] </a>
+	<a href="/_admin" class="js-admin" style="display: none;">[Admin] </a>
+	&nbsp;
+</div>
 
 </div>
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
@@ -40,7 +62,8 @@
 <script>
 	var auth = {
 		email: {{js .Auth.Email}},
-		write: {{js .Auth.Write}} === 'true'
+		write: {{js .Auth.Write}} === 'true',
+		admin: {{js .Auth.Admin}} === 'true',
 	};
 </script>
 <script src="/article.js"></script>

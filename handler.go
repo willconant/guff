@@ -9,16 +9,19 @@ import (
 	"github.com/russross/blackfriday"
 	"encoding/json"
 	"io/ioutil"
-	"time"
 	"strings"
 	"cot"
 	"fmt"
+	"time"
+	"crypto/sha256"
+	"crypto/rand"
+	"encoding/hex"
 )
 
 type Handler struct {
 	db               *cot.Database
 	packageDir       string
-	articleTemplate  *template.Template
+	templates        *template.Template
 }
 
 type Auth struct {
@@ -39,8 +42,8 @@ func NewHandler(dbServer string, dbName string) http.Handler {
 	
 	handler.packageDir = pkg.Dir
 	
-	handler.articleTemplate = template.New("article")
-	handler.articleTemplate.Funcs(template.FuncMap{
+	handler.templates = template.New("article")
+	handler.templates.Funcs(template.FuncMap{
 		"processMarkdown": func(input string) (template.HTML, error) {
 			output, err := handler.processMarkdown(input)
 			if err != nil {
@@ -48,13 +51,21 @@ func NewHandler(dbServer string, dbName string) http.Handler {
 			}
 			return template.HTML(output), nil
 		},
+
+		"formatDate": func(input string) (string, error) {
+			t, err := time.Parse(time.RFC3339, input)
+			if err != nil { return "", err }
+			return t.Format("Jan 2, 2006 at 3:04 PM"), nil
+		},
 	})
 	
-	_, err = handler.articleTemplate.ParseFiles(pkg.Dir + "/templates/article.html")
-	if err != nil {
-		panic(err)
-	}
-		
+	_, err = handler.templates.ParseGlob(pkg.Dir + "/templates/*.html")
+	if err != nil { panic(err) }
+
+	/*handler.adminTemplate = template.New("admin")
+	_, err = handler.adminTemplate.ParseFiles(pkg.Dir + "/templates/admin.html")
+	if err != nil { panic(err) }*/
+
 	return &handler
 }
 
@@ -67,7 +78,7 @@ func (handler *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	switch r.URL.Path {
-	case "/normalize.css", "/article.css", "/article.js":
+	case "/normalize.css", "/article.css", "/article.js", "/admin.css", "/admin.js":
 		http.ServeFile(w, r, handler.packageDir + "/templates" + r.URL.Path)
 	case "/_markdown":
 		handler.handleMarkdown(w, r)
@@ -75,6 +86,10 @@ func (handler *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		handler.handleLogin(w, r)
 	case "/_logout":
 		handler.handleLogout(w, r)
+	case "/_admin":
+		handler.handleAdmin(w, r)
+	case "/_admin/role":
+		handler.handleAdminRole(w, r)
 	default:
 		handler.handleArticle(w, r)
 	}
@@ -121,10 +136,12 @@ func (handler *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if err != nil { panic(err) }
 
 	if result["status"].(string) == "okay" {
-		handler.recordLogin(result["email"].(string))
+		err := handler.recordLogin(result["email"].(string))
+		if err != nil { panic(err) }
 
 		cvals := url.Values{}
 		cvals.Set("email", result["email"].(string))
+		cvals.Set("check", handler.hexSha256Sum(result["email"].(string)))
 
 		cookie := &http.Cookie{}
 		cookie.Name = "auth"
@@ -166,9 +183,15 @@ func (handler *Handler) checkAuth(r *http.Request) (auth *Auth) {
 
 	auth.Email = q.Get("email")
 
+	if handler.hexSha256Sum(auth.Email) != q.Get("check") {
+		// checksum doesn't match
+		auth.Email = ""
+		return
+	}
+
 	if auth.Email != "" {
 		var user User
-		found, err := handler.db.GetDoc("user-" + auth.Email, &user)
+		found, err := handler.db.GetDoc("user-" + strings.ToLower(auth.Email), &user)
 		if err != nil { panic(err) }
 
 		if found {
@@ -186,6 +209,99 @@ func (handler *Handler) checkAuth(r *http.Request) (auth *Auth) {
 		}
 	}
 
+	return
+}
+
+func (handler *Handler) handleAdmin(w http.ResponseWriter, r *http.Request) {
+	auth := handler.checkAuth(r);
+	if !auth.Admin {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	var userRows []struct {
+		ID    string `json:"id"`
+		Email string `json:"key"`
+		Role  string `json:"value"`
+	}
+
+	usersQuery := &cot.ViewQuery{
+		"users",
+		"users",
+		`function(doc) { if (doc._id.indexOf('user-') === 0) emit(doc.Email, doc.Role) }`,
+		"",
+		"",
+		"\ufff0",
+	}
+
+	_, err := handler.db.Query(usersQuery, &userRows)
+	if err != nil { panic(err) }
+
+	var articleRows []struct {
+		ID    string `json:"id"`
+		Title string `json:"key"`
+		Value  *struct {
+			CDate  string
+			MDate  string
+			Public bool
+		}
+	}
+
+	articlesQuery := &cot.ViewQuery{
+		"articles",
+		"articles",
+		`function(doc) {
+			if (doc.Type === 'Article') {
+				emit(doc.Title, {
+					CDate: (doc.History.length === 0 ? doc.Date : doc.History[0].Date),
+					MDate: (doc.History.length === 0 ? doc.Date : doc.History[doc.History.length-1].Date),
+					Public: doc.Public
+				});
+			}
+		}`,
+		"",
+		"",
+		"\ufff0",
+	}
+
+	_, err = handler.db.Query(articlesQuery, &articleRows)
+	if err != nil { panic(err) }
+
+	templateData := map[string]interface{}{
+		"UserRows" : userRows,
+		"ArticleRows": articleRows,
+		"Auth" : auth,
+	}
+
+	err = handler.templates.ExecuteTemplate(w, "admin.html", templateData)
+	if err != nil { panic(err) }
+}
+
+func (handler *Handler) handleAdminRole(w http.ResponseWriter, r *http.Request) {
+	auth := handler.checkAuth(r);
+	if !auth.Admin {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	buffer, err := ioutil.ReadAll(r.Body)
+	if err != nil { panic(err) }
+
+	query, err := url.ParseQuery(string(buffer))
+	if err != nil { panic(err) }
+
+	if query.Get("Email") == auth.Email {
+		w.Header().Add("content-type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		w.Write([]byte(`{"ok":false,"error":"You cannot change your own role."}`))
+		return
+	}
+
+	handler.changeRole(query.Get("Email"), query.Get("Role"))
+
+	w.Header().Add("content-type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	w.Write([]byte(`{"ok":true}`))
 	return
 }
 
@@ -225,9 +341,6 @@ func (handler *Handler) handleArticle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	
-	versions, err := handler.getArticleVersionList(article.ID)
-	if err != nil { panic(err) }
-
 	// serve up the page
 	w.Header().Add("content-type", "text/html")
 	if article.Rev == "" {
@@ -236,11 +349,14 @@ func (handler *Handler) handleArticle(w http.ResponseWriter, r *http.Request) {
 
 	templateData := map[string]interface{}{
 		"Article" : &article,
-		"Versions" : versions,
 		"Auth" : auth,
 	}
 
-	err = handler.articleTemplate.ExecuteTemplate(w, "article.html", templateData)
+	if auth.Email != "" && article.ID != "index" {
+		templateData["ShowVisibility"] = true
+	}
+
+	err = handler.templates.ExecuteTemplate(w, "article.html", templateData)
 	if err != nil { panic(err) }
 }
 
@@ -256,27 +372,22 @@ func (handler *Handler) handlePutArticle(w http.ResponseWriter, r *http.Request,
 	query, err := url.ParseQuery(string(buffer))
 	if err != nil { panic(err) }
 	
-	var article Article
-	article.ID = r.URL.Path[1:]
-	if article.ID == "" {
-		article.ID = "index"
-	}
-	article.Rev = query.Get("_rev")
-	article.Type = "Article"
-	article.DateStr = time.Now().Format(time.RFC3339)
-	article.Title = query.Get("Title")
-	article.Markdown = query.Get("Markdown")
-	if article.ID == "index" {
-		article.Public = true
-	} else if query.Get("Public") == "true" {
-		article.Public = true
-	} else {
-		article.Public = false
+	articleID := r.URL.Path[1:]
+	if articleID == "" {
+		articleID = "index"
 	}
 
-	rev, err := handler.putArticle(&article)
+	rev, err := handler.updateArticle(&ArticleUpdate{
+		articleID,
+		query.Get("_rev"),
+		query.Get("Title"),
+		auth.Email,
+		query.Get("Markdown"),
+		query.Get("Public") == "true",
+	})
+
 	if err != nil { panic(err) }
-	
+
 	if rev == "" {
 		w.Header().Add("content-type", "application/json")
 		w.WriteHeader(http.StatusConflict)
@@ -358,3 +469,39 @@ func (handler *Handler) processMarkdown(input string) ([]byte, error) {
 	
 	return output, nil
 }
+
+func (handler *Handler) hexSha256Sum(s string) string {
+	var loginKeyDoc map[string]interface{}
+	var found bool
+	var err error
+
+	for {
+		found, err = handler.db.GetDoc("login-key", &loginKeyDoc)
+		if err != nil { panic(err) }
+		if !found {
+			loginKeyDoc = make(map[string]interface{})
+			loginKeyDoc["_id"] = "login-key"
+			loginKeyDoc["key"] = randomHex()
+			_, err := handler.db.PutDoc("login-key", loginKeyDoc)
+			if err != nil { panic(err) }
+		} else {
+			break
+		}
+	}
+
+	key := loginKeyDoc["key"].(string)
+
+
+	h := sha256.New()
+	h.Write([]byte(key))
+	h.Write([]byte(s))
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+func randomHex() string {
+	b := make([]byte, 64)
+	_, err := rand.Read(b)
+	if err != nil { panic(err) }
+	return hex.EncodeToString(b)
+}
+
