@@ -7,7 +7,7 @@ Key Features:
 - articles are written in [Markdown] format
 - users must have an author account to edit articles
 - private articles may only be viewed by users with reader or author accounts
-- every version of every article is store for posterity
+- every version of every article is stored for posterity
 
   [Markdown]: http://daringfireball.net/projects/markdown/syntax
 
