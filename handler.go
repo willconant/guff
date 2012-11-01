@@ -10,7 +10,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"strings"
-	"cot"
+	"github.com/willconant/cot"
 	"fmt"
 	"time"
 	"crypto/sha256"
@@ -20,6 +20,7 @@ import (
 
 type Handler struct {
 	db               *cot.Database
+	personaAudience  string
 	packageDir       string
 	templates        *template.Template
 }
@@ -31,11 +32,12 @@ type Auth struct {
 	Admin bool
 }
 
-func NewHandler(dbServer string, dbName string) http.Handler {
+func NewHandler(dbServer string, dbName string, personaAudience string) http.Handler {
 	var handler Handler
 	handler.db = &cot.Database{dbServer, dbName, false}
+	handler.personaAudience = personaAudience
 	
-	pkg, err := build.Default.Import("guff", "", 0x0)
+	pkg, err := build.Default.Import("github.com/willconant/guff", "", 0x0)
 	if err != nil {
 		panic(err)
 	}
@@ -115,7 +117,7 @@ func (handler *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	post := url.Values{}
 	post.Set("assertion", query.Get("assertion"))
-	post.Set("audience", "http://guff.willconant.com:8080")
+	post.Set("audience", handler.personaAudience)
 
 	client := &http.Client{}
 	
